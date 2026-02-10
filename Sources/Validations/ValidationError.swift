@@ -3,18 +3,16 @@ import Foundation
 // TODO: Better labeled error messages?
 // TODO: Inline error messages not working as expected in async contexts.
 
-@usableFromInline
-enum ValidationError: Error, Sendable {
+public enum ValidationError: Error, Sendable {
   case failed(ErrorLabel, Context)
   case manyFailed([Error], Context)
 
-  @usableFromInline
-  static func failed(summary: String, label: String = "", inlineLabel: Bool = false) -> Self {
+  public static func failed(summary: String, label: String = "", inlineLabel: Bool = false) -> Self
+  {
     return .failed(.init(label: label, isInline: inlineLabel), .init(debugDescription: summary))
   }
 
-  @usableFromInline
-  static func failed(label: String, error: Error, inlineLabel: Bool = false) -> Self {
+  public static func failed(label: String, error: Error, inlineLabel: Bool = false) -> Self {
     .failed(
       .init(label: label, isInline: inlineLabel),
       .init(
@@ -24,13 +22,15 @@ enum ValidationError: Error, Sendable {
     )
   }
 
-  @usableFromInline
-  static func manyFailed(_ errors: [Error]) -> Self {
+  public static func manyFailed(_ errors: [Error]) -> Self {
     .manyFailed(errors, .init(debugDescription: ""))
   }
 
-  @usableFromInline
-  struct Context: Sendable {
+  public var localizedDescription: String {
+    debugDescription
+  }
+
+  public struct Context: Sendable {
     let debugDescription: String
     let underlyingError: Error?
 
@@ -44,8 +44,7 @@ enum ValidationError: Error, Sendable {
     }
   }
 
-  @usableFromInline
-  enum ErrorLabel: Sendable {
+  public enum ErrorLabel: Sendable {
     case inline(String)
     case notInline(String)
 
@@ -74,9 +73,9 @@ enum ValidationError: Error, Sendable {
     @usableFromInline
     var label: String {
       switch self {
-      case let .inline(label):
+      case .inline(let label):
         return label
-      case let .notInline(label):
+      case .notInline(let label):
         return label
       }
     }
@@ -90,7 +89,7 @@ extension ValidationError: CustomDebugStringConvertible {
     func flatten(_ depth: Int = 0) -> (Error) -> [(depth: Int, error: Error)] {
       { error in
         switch error {
-        case let ValidationError.manyFailed(errors, _):
+        case ValidationError.manyFailed(let errors, _):
           return errors.flatMap(flatten(depth + 1))
         default:
           return [(depth, error)]
@@ -101,7 +100,7 @@ extension ValidationError: CustomDebugStringConvertible {
     switch self {
     case .failed:
       return self
-    case let .manyFailed(errors, context):
+    case .manyFailed(let errors, let context):
       // sorts unlabeled errors to the top.
       return .manyFailed(
         errors.flatMap(flatten())
@@ -118,12 +117,11 @@ extension ValidationError: CustomDebugStringConvertible {
     }
   }
 
-  @usableFromInline
-  var debugDescription: String {
+  public var debugDescription: String {
     switch flattened() {
-    case let .failed(label, context):
+    case .failed(let label, let context):
       return format(label: label, context: context)
-    case let .manyFailed(errors, _):
+    case .manyFailed(let errors, _):
       return debugDescription(for: errors)
     }
   }
@@ -141,7 +139,7 @@ extension ValidationError: CustomDebugStringConvertible {
   func debugDescription(for errors: [Error]) -> String {
     func isFailed(_ error: Error) -> (ErrorLabel, Context)? {
       guard let error = error as? ValidationError,
-            case let .failed(label, context) = error
+        case .failed(let label, let context) = error
       else {
         return nil
       }
@@ -161,7 +159,7 @@ extension ValidationError: CustomDebugStringConvertible {
 
     var errors = errors[...]
     while let error = errors.popFirst() {
-      guard case let .some((label, context)) = isFailed(error) else {
+      guard case .some((let label, let context)) = isFailed(error) else {
         let formatted = formatError(error)
         guard !formatted.isEmpty else {
           continue
