@@ -16,6 +16,54 @@ extension Array where Element: Validation {
   }
 }
 
+extension Array where Element: Validatable {
+
+  @inlinable
+  public static func accumulating() -> some Validation<Self> {
+    Validators.AccumulatingValidator()
+  }
+
+  @inlinable
+  public static func failEarly() -> some Validation<Self> {
+    return Validators.FailEarlyValidator()
+  }
+}
+
+extension Validators {
+  public struct AccumulatingValidator<Element>: Validation where Element: Validatable {
+    @inlinable
+    public init() {}
+
+    @inlinable
+    public func validate(_ value: [Element]) throws {
+      var errors = [any Error]()
+      for item in value {
+        do {
+          try item.validate()
+        } catch {
+          errors.append(error)
+        }
+      }
+      if errors.count > 0 {
+        throw ValidationError.manyFailed(errors)
+      }
+    }
+  }
+
+  public struct FailEarlyValidator<Element>: Validation where Element: Validatable {
+
+    @inlinable
+    public init() {}
+
+    @inlinable
+    public func validate(_ value: [Element]) throws {
+      for item in value {
+        try item.validate()
+      }
+    }
+  }
+}
+
 extension Array where Element: AsyncValidation {
 
   /// Create a validator from an array of validators.

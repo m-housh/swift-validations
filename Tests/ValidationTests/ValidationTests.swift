@@ -1,7 +1,8 @@
 import CasePaths
 import CustomDump
-@testable import Validations
 import XCTest
+
+@testable import Validations
 
 final class ValidationTests: XCTestCase {
 
@@ -22,7 +23,7 @@ final class ValidationTests: XCTestCase {
         Int.equals(5).or {
           Int.greaterThan(10)
         }
-      }
+      },
     ]
 
     for validator in validators {
@@ -224,6 +225,24 @@ final class ValidationTests: XCTestCase {
     XCTAssertNoThrow(try sut.validate(Sut.one(1)))
     XCTAssertNoThrow(try sut.validate(Sut.two(11)))
     XCTAssertThrowsError(try sut.validate(Sut.three(0)))
+
+    let sut2 = ValidatorOf<ContainsValidatable>.oneOf {
+      Validator.case(\.one)
+      Validator.case(\.two, with: .greaterThan(0))
+    }
+
+    XCTAssertNoThrow(
+      try sut2.validate(ContainsValidatable.one(.init(name: "foo", age: 1)))
+    )
+    XCTAssertThrowsError(
+      try sut2.validate(ContainsValidatable.one(.init(name: "", age: 1)))
+    )
+    XCTAssertThrowsError(
+      try sut2.validate(ContainsValidatable.one(.init(name: "foo", age: -1)))
+    )
+    XCTAssertNoThrow(
+      try sut2.validate(ContainsValidatable.two(1))
+    )
   }
 
   func test_oneOF() throws {
@@ -265,10 +284,12 @@ final class ValidationTests: XCTestCase {
       var body: some Validation<Self> {
         Validator.accumulating {
           Validator.validate(\.name, with: .notEmpty())
-          Validator.validate(\.email, with: .accumulating {
-            String.notEmpty()
-            String.contains("@")
-          })
+          Validator.validate(
+            \.email,
+            with: .accumulating {
+              String.notEmpty()
+              String.contains("@")
+            })
         }
       }
     }
@@ -285,7 +306,8 @@ final class ValidationTests: XCTestCase {
     }
 
     XCTAssertNoThrow(try HoldsUser(user: .init(name: "blob", email: "blob@example.com")).validate())
-    XCTAssertThrowsError(try HoldsUser(user: .init(name: "blob", email: "blob.example.com")).validate())
+    XCTAssertThrowsError(
+      try HoldsUser(user: .init(name: "blob", email: "blob.example.com")).validate())
   }
 
   func test_builder_either() {
@@ -355,7 +377,7 @@ final class ValidationTests: XCTestCase {
     do {
       try User(name: "", email: "blob.example.com").validate()
     } catch {
-      guard case let .manyFailed(validationErrors, _) = error as! ValidationError else {
+      guard case .manyFailed(let validationErrors, _) = error as! ValidationError else {
         XCTFail()
         return
       }
@@ -383,7 +405,8 @@ final class ValidationTests: XCTestCase {
     }
 
     XCTAssertNoThrow(try User(name: "Blob", email: "blob@example.com", isAdmin: true).validate())
-    XCTAssertThrowsError(try User(name: "Blob", email: "blob@example.com", isAdmin: false).validate())
+    XCTAssertThrowsError(
+      try User(name: "Blob", email: "blob@example.com", isAdmin: false).validate())
   }
 
   func test_false_validator() {
@@ -405,7 +428,8 @@ final class ValidationTests: XCTestCase {
     }
 
     XCTAssertNoThrow(try User(name: "Blob", email: "blob@example.com", isAdmin: false).validate())
-    XCTAssertThrowsError(try User(name: "Blob", email: "blob@example.com", isAdmin: true).validate())
+    XCTAssertThrowsError(
+      try User(name: "Blob", email: "blob@example.com", isAdmin: true).validate())
   }
 
   func test_never_validator() {
@@ -506,9 +530,9 @@ final class ValidationTests: XCTestCase {
   func test_map() {
     let sut = Int.greaterThan(1)
       .map(to: Validator<String>.self) {
-        "\($0)" // convert the int to a string.
+        "\($0)"  // convert the int to a string.
       } validation: {
-        String.equals("2") // validate the string.
+        String.equals("2")  // validate the string.
       }
 
     XCTAssertNoThrow(try sut.validate(2))
@@ -575,15 +599,15 @@ final class ValidationTests: XCTestCase {
     } catch {
       let error = error as! ValidationError
       let expected = """
-      Expected to not be empty.
-      Name:
-      Expected to not be empty.
-      Name.count: 0 is not greater than 5
+        Expected to not be empty.
+        Name:
+        Expected to not be empty.
+        Name.count: 0 is not greater than 5
 
-      Email:
-      Expected to not be empty.
+        Email:
+        Expected to not be empty.
 
-      """
+        """
       expectNoDifference(error.debugDescription, expected)
     }
   }
@@ -592,6 +616,40 @@ final class ValidationTests: XCTestCase {
     let validator = Int.greaterThan(1).eraseToAnyValidator()
     XCTAssertNoThrow(try validator.validate(2))
     XCTAssertThrowsError(try validator.validate(1))
+  }
+
+  func testArrayValidatorAccumulating() {
+    let validator = [ValueOne].accumulating()
+    XCTAssertNoThrow(
+      try validator.validate([
+        ValueOne(name: "foo", age: 10),
+        ValueOne(name: "bar", age: 12),
+
+      ]))
+
+    XCTAssertThrowsError(
+      try validator.validate([
+        ValueOne(name: "", age: 10),
+        ValueOne(name: "bar", age: -12),
+
+      ]))
+  }
+
+  func testArrayValidatorFailEarly() {
+    let validator = [ValueOne].failEarly()
+    XCTAssertNoThrow(
+      try validator.validate([
+        ValueOne(name: "foo", age: 10),
+        ValueOne(name: "bar", age: 12),
+
+      ]))
+
+    XCTAssertThrowsError(
+      try validator.validate([
+        ValueOne(name: "", age: 10),
+        ValueOne(name: "bar", age: -12),
+
+      ]))
   }
 }
 
@@ -605,4 +663,23 @@ enum Sut: Equatable {
   case one(Int)
   case two(Int)
   case three(Int)
+}
+
+struct ValueOne: Validatable {
+  let name: String
+  let age: Int
+
+  var body: some Validation<Self> {
+    Validator.accumulating {
+      Validator.validate(\.name, with: String.notEmpty())
+      Validator.validate(\.age, with: .greaterThan(0))
+    }
+  }
+}
+
+@CasePathable
+@dynamicMemberLookup
+enum ContainsValidatable {
+  case one(ValueOne)
+  case two(Int)
 }
